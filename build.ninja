@@ -1,0 +1,14 @@
+cc = clang
+cflags = -ansi -nostdlib -std=c89 -pedantic -Wall -Weverything -Wextra -Werror -Wno-disabled-macro-expansion -Wno-unsafe-buffer-usage -Wno-padded -D_POSIX_C_SOURCE=200809L
+ldflags = -ansi -std=c89
+rule cc
+  command = $cc $cflags -c $in -o $out
+  depfile = $out.d
+  deps = gcc
+
+rule link
+  command = $cc $ldflags $in -o $out
+
+build out/naesh.o: cc src/master.c
+build out/naesh: link out/naesh.o
+default out/naesh

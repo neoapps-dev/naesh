@@ -1,0 +1,8 @@
+#include "signal.h"
+#include "input.h"
+#include "path.h"
+#include "builtin.h"
+#include "exec.h"
+#include "parse.h"
+#include "repl.h"
+#include "main.h"

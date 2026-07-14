@@ -1,7 +1,8 @@
 #include "naesh.h"
-char **naesh_parse_line(char *line) {
+char **naesh_parse_line(char *line, int **out_quote_flags) {
     int buf_size = NAESH_BUF_SIZE;
     int tok_size = NAESH_BUF_SIZE;
+    int flag_size = NAESH_BUF_SIZE;
     int pos = 0;
     int tpos = 0;
     int in_sq = 0;
@@ -9,9 +10,11 @@ char **naesh_parse_line(char *line) {
     char *p;
     char *tok;
     char **tokens;
+    int *quote_flags;
     tokens = (char **)malloc(sizeof(char *) * (size_t)buf_size);
     tok = (char *)malloc((size_t)tok_size);
-    if (!tokens || !tok) {
+    quote_flags = (int *)malloc(sizeof(int) * (size_t)flag_size);
+    if (!tokens || !tok || !quote_flags) {
         fprintf(stderr, "naesh: allocation error\n");
         exit(1);
     }
@@ -22,6 +25,9 @@ char **naesh_parse_line(char *line) {
         tpos = 0;
         in_sq = 0;
         in_dq = 0;
+        if (*p == '\'') quote_flags[pos] = 1;
+        else if (*p == '"') quote_flags[pos] = 2;
+        else quote_flags[pos] = 0;
         while (*p && (in_sq || in_dq || (*p != ' ' && *p != '\t' && *p != '\r' && *p != '\n' && *p != '|' && *p != '>' && *p != '<'))) {
             if (tpos >= tok_size - 1) {
                 tok_size *= 2;
@@ -68,7 +74,8 @@ char **naesh_parse_line(char *line) {
             if (pos >= buf_size) {
                 buf_size *= 2;
                 tokens = (char **)realloc(tokens, sizeof(char *) * (size_t)buf_size);
-                if (!tokens) {
+                quote_flags = (int *)realloc(quote_flags, sizeof(int) * (size_t)buf_size);
+                if (!tokens || !quote_flags) {
                     fprintf(stderr, "naesh: allocation error\n");
                     exit(1);
                 }
@@ -81,19 +88,22 @@ char **naesh_parse_line(char *line) {
                 if (pos >= buf_size) {
                     buf_size *= 2;
                     tokens = (char **)realloc(tokens, sizeof(char *) * (size_t)buf_size);
-                    if (!tokens) {
+                    quote_flags = (int *)realloc(quote_flags, sizeof(int) * (size_t)buf_size);
+                    if (!tokens || !quote_flags) {
                         fprintf(stderr, "naesh: allocation error\n");
                         exit(1);
                     }
                 }
                 tokens[pos] = strdup(">>");
+                quote_flags[pos] = 0;
                 pos++;
                 p += 2;
             } else {
                 if (pos >= buf_size) {
                     buf_size *= 2;
                     tokens = (char **)realloc(tokens, sizeof(char *) * (size_t)buf_size);
-                    if (!tokens) {
+                    quote_flags = (int *)realloc(quote_flags, sizeof(int) * (size_t)buf_size);
+                    if (!tokens || !quote_flags) {
                         fprintf(stderr, "naesh: allocation error\n");
                         exit(1);
                     }
@@ -104,14 +114,20 @@ char **naesh_parse_line(char *line) {
                     op[1] = '\0';
                     tokens[pos] = strdup(op);
                 }
+                quote_flags[pos] = 0;
                 pos++;
                 p++;
             }
         }
     }
     tokens[pos] = NULL;
+    *out_quote_flags = quote_flags;
     free(tok);
     return tokens;
+}
+
+void naesh_quote_flags_free(int *quote_flags) {
+    free(quote_flags);
 }
 
 static void naesh_cmd_free(naesh_cmd *cmd) {
@@ -126,13 +142,13 @@ static void naesh_cmd_free(naesh_cmd *cmd) {
     free(cmd->redir_err);
 }
 
-static char *expand_env(const char *token, int lastexit) {
+static char *expand_env(const char *token, int lastexit, int quoted) {
     char *result;
     int rsize;
     int rpos;
     const char *p;
     if (!token) return NULL;
-    if (!strchr(token, '$')) return strdup(token);
+    if (quoted == 1 || !strchr(token, '$')) return strdup(token);
     rsize = NAESH_BUF_SIZE;
     result = (char *)malloc((size_t)rsize);
     if (!result) {

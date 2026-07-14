@@ -2,6 +2,7 @@
 int naesh_repl(void) {
     char *line;
     char **args;
+    int *quote_flags;
     naesh_pipeline *pipeline;
     int lastexit;
     lastexit = 0;
@@ -15,15 +16,16 @@ int naesh_repl(void) {
             sigint_received = 0;
             continue;
         }
-        args = naesh_parse_line(line);
+        args = naesh_parse_line(line, &quote_flags);
         {
             int i;
             for (i = 0; args[i]; i++) {
-                char *expanded = expand_env(args[i], lastexit);
+                char *expanded = expand_env(args[i], lastexit, quote_flags[i]);
                 free(args[i]);
                 args[i] = expanded;
             }
         }
+        naesh_quote_flags_free(quote_flags);
         pipeline = naesh_parse(args);
         if (pipeline) {
             if (pipeline->count > 0) {

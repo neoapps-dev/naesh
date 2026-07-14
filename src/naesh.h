@@ -27,7 +27,8 @@ typedef struct {
     naesh_cmd *cmds;
 } naesh_pipeline;
 int naesh_repl(void);
-char **naesh_parse_line(char *line);
+char **naesh_parse_line(char *line, int **quote_flags);
+void naesh_quote_flags_free(int *quote_flags);
 naesh_pipeline *naesh_parse(char **tokens);
 void naesh_pipeline_free(naesh_pipeline *pl);
 int naesh_exec_pipeline(naesh_pipeline *pl);

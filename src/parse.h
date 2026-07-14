@@ -126,6 +126,142 @@ static void naesh_cmd_free(naesh_cmd *cmd) {
     free(cmd->redir_err);
 }
 
+static char *expand_env(const char *token, int lastexit) {
+    char *result;
+    int rsize;
+    int rpos;
+    const char *p;
+    if (!token) return NULL;
+    if (!strchr(token, '$')) return strdup(token);
+    rsize = NAESH_BUF_SIZE;
+    result = (char *)malloc((size_t)rsize);
+    if (!result) {
+        fprintf(stderr, "naesh: allocation error\n");
+        exit(1);
+    }
+    rpos = 0;
+    p = token;
+    while (*p) {
+        if (*p == '$') {
+            p++;
+            if (!*p || *p == '\'' || *p == '"') {
+                if (rpos >= rsize - 1) {
+                    rsize *= 2;
+                    result = (char *)realloc(result, (size_t)rsize);
+                    if (!result) { fprintf(stderr, "naesh: allocation error\n"); exit(1); }
+                }
+                result[rpos++] = '$';
+            } else if (*p == '?') {
+                char buf[32];
+                int len;
+                len = snprintf(buf, sizeof(buf), "%d", lastexit);
+                while (rpos + len >= rsize) {
+                    rsize *= 2;
+                    result = (char *)realloc(result, (size_t)rsize);
+                    if (!result) { fprintf(stderr, "naesh: allocation error\n"); exit(1); }
+                }
+                memcpy(result + rpos, buf, (size_t)len);
+                rpos += len;
+                p++;
+            } else if (*p == '$') {
+                char buf[32];
+                int len;
+                len = snprintf(buf, sizeof(buf), "%d", (int)getpid());
+                while (rpos + len >= rsize) {
+                    rsize *= 2;
+                    result = (char *)realloc(result, (size_t)rsize);
+                    if (!result) { fprintf(stderr, "naesh: allocation error\n"); exit(1); }
+                }
+                memcpy(result + rpos, buf, (size_t)len);
+                rpos += len;
+                p++;
+            } else if (*p == '#') {
+                if (rpos >= rsize - 1) {
+                    rsize *= 2;
+                    result = (char *)realloc(result, (size_t)rsize);
+                    if (!result) { fprintf(stderr, "naesh: allocation error\n"); exit(1); }
+                }
+                result[rpos++] = '0';
+                p++;
+            } else if (*p == '!') {
+                if (rpos >= rsize - 1) {
+                    rsize *= 2;
+                    result = (char *)realloc(result, (size_t)rsize);
+                    if (!result) { fprintf(stderr, "naesh: allocation error\n"); exit(1); }
+                }
+                result[rpos++] = '0';
+                p++;
+            } else if (*p == '{') {
+                const char *start;
+                const char *val;
+                int varlen;
+                p++;
+                start = p;
+                while (*p && *p != '}') p++;
+                varlen = (int)(p - start);
+                if (*p == '}') p++;
+                {
+                    char varname[256];
+                    int copylen = varlen < 255 ? varlen : 255;
+                    memcpy(varname, start, (size_t)copylen);
+                    varname[copylen] = '\0';
+                    val = getenv(varname);
+                }
+                if (val) {
+                    int vlen = (int)strlen(val);
+                    while (rpos + vlen >= rsize) {
+                        rsize *= 2;
+                        result = (char *)realloc(result, (size_t)rsize);
+                        if (!result) { fprintf(stderr, "naesh: allocation error\n"); exit(1); }
+                    }
+                    memcpy(result + rpos, val, (size_t)vlen);
+                    rpos += vlen;
+                }
+            } else if ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || *p == '_') {
+                const char *start = p;
+                const char *val;
+                int varlen;
+                while ((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') || (*p >= '0' && *p <= '9') || *p == '_') p++;
+                varlen = (int)(p - start);
+                {
+                    char varname[256];
+                    int copylen = varlen < 255 ? varlen : 255;
+                    memcpy(varname, start, (size_t)copylen);
+                    varname[copylen] = '\0';
+                    val = getenv(varname);
+                }
+                if (val) {
+                    int vlen = (int)strlen(val);
+                    while (rpos + vlen >= rsize) {
+                        rsize *= 2;
+                        result = (char *)realloc(result, (size_t)rsize);
+                        if (!result) { fprintf(stderr, "naesh: allocation error\n"); exit(1); }
+                    }
+                    memcpy(result + rpos, val, (size_t)vlen);
+                    rpos += vlen;
+                }
+            } else {
+                if (rpos >= rsize - 2) {
+                    rsize *= 2;
+                    result = (char *)realloc(result, (size_t)rsize);
+                    if (!result) { fprintf(stderr, "naesh: allocation error\n"); exit(1); }
+                }
+                result[rpos++] = '$';
+                result[rpos++] = *p++;
+            }
+        } else {
+            if (rpos >= rsize - 1) {
+                rsize *= 2;
+                result = (char *)realloc(result, (size_t)rsize);
+                if (!result) { fprintf(stderr, "naesh: allocation error\n"); exit(1); }
+            }
+            result[rpos++] = *p++;
+        }
+    }
+    result[rpos] = '\0';
+    return result;
+}
+
 naesh_pipeline *naesh_parse(char **tokens) {
     naesh_pipeline *pl;
     int cmd_count;

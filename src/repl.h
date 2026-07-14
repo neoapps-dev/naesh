@@ -16,6 +16,14 @@ int naesh_repl(void) {
             continue;
         }
         args = naesh_parse_line(line);
+        {
+            int i;
+            for (i = 0; args[i]; i++) {
+                char *expanded = expand_env(args[i], lastexit);
+                free(args[i]);
+                args[i] = expanded;
+            }
+        }
         pipeline = naesh_parse(args);
         if (pipeline) {
             if (pipeline->count > 0) {

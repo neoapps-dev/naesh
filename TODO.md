@@ -9,7 +9,7 @@
 - [x] signal handling (SIGINT, etc)
 - [x] PATH lookup
 - [x] C89 with -Weverything
-- [ ] environment variable expansion ($VAR, ${VAR})
+- [x] environment variable expansion ($VAR, ${VAR}, $?, $$, etc)
 - [x] quoting (single, double)
 - [ ] escape sequences
 - [x] redirects (>, >>, <, 2>, etc)

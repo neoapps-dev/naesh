@@ -12,7 +12,7 @@
 - [ ] environment variable expansion ($VAR, ${VAR})
 - [x] quoting (single, double)
 - [ ] escape sequences
-- [ ] redirects (>, >>, <, 2>, etc)
+- [x] redirects (>, >>, <, 2>, etc)
 - [x] pipelines (|)
 - [ ] background execution (&)
 - [ ] job control (fg, bg, jobs)

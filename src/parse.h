@@ -22,7 +22,7 @@ char **naesh_parse_line(char *line) {
         tpos = 0;
         in_sq = 0;
         in_dq = 0;
-        while (*p && (in_sq || in_dq || (*p != ' ' && *p != '\t' && *p != '\r' && *p != '\n' && *p != '|'))) {
+        while (*p && (in_sq || in_dq || (*p != ' ' && *p != '\t' && *p != '\r' && *p != '\n' && *p != '|' && *p != '>' && *p != '<'))) {
             if (tpos >= tok_size - 1) {
                 tok_size *= 2;
                 tok = (char *)realloc(tok, (size_t)tok_size);
@@ -76,23 +76,54 @@ char **naesh_parse_line(char *line) {
             tokens[pos] = strdup(tok);
             pos++;
         }
-        if (*p == '|') {
-            if (pos >= buf_size) {
-                buf_size *= 2;
-                tokens = (char **)realloc(tokens, sizeof(char *) * (size_t)buf_size);
-                if (!tokens) {
-                    fprintf(stderr, "naesh: allocation error\n");
-                    exit(1);
+        if (*p == '|' || *p == '>' || *p == '<') {
+            if (*p == '>' && p[1] == '>') {
+                if (pos >= buf_size) {
+                    buf_size *= 2;
+                    tokens = (char **)realloc(tokens, sizeof(char *) * (size_t)buf_size);
+                    if (!tokens) {
+                        fprintf(stderr, "naesh: allocation error\n");
+                        exit(1);
+                    }
                 }
+                tokens[pos] = strdup(">>");
+                pos++;
+                p += 2;
+            } else {
+                if (pos >= buf_size) {
+                    buf_size *= 2;
+                    tokens = (char **)realloc(tokens, sizeof(char *) * (size_t)buf_size);
+                    if (!tokens) {
+                        fprintf(stderr, "naesh: allocation error\n");
+                        exit(1);
+                    }
+                }
+                {
+                    char op[2];
+                    op[0] = *p;
+                    op[1] = '\0';
+                    tokens[pos] = strdup(op);
+                }
+                pos++;
+                p++;
             }
-            tokens[pos] = strdup("|");
-            pos++;
-            p++;
         }
     }
     tokens[pos] = NULL;
     free(tok);
     return tokens;
+}
+
+static void naesh_cmd_free(naesh_cmd *cmd) {
+    int j;
+    if (!cmd) return;
+    if (cmd->args) {
+        for (j = 0; cmd->args[j]; j++) free(cmd->args[j]);
+        free(cmd->args);
+    }
+    free(cmd->redir_in);
+    free(cmd->redir_out);
+    free(cmd->redir_err);
 }
 
 naesh_pipeline *naesh_parse(char **tokens) {
@@ -125,7 +156,7 @@ naesh_pipeline *naesh_parse(char **tokens) {
             }
         }
     }
-    pl->cmds = (char ***)malloc(sizeof(char **) * (size_t)cmd_count);
+    pl->cmds = (naesh_cmd *)calloc((size_t)cmd_count, sizeof(naesh_cmd));
     if (!pl->cmds) {
         fprintf(stderr, "naesh: allocation error\n");
         exit(1);
@@ -135,17 +166,101 @@ naesh_pipeline *naesh_parse(char **tokens) {
     start = 0;
     for (i = 0; ; i++) {
         if (!tokens[i] || strcmp(tokens[i], "|") == 0) {
-            int len = i - start;
             int j;
-            pl->cmds[cmd_idx] = (char **)malloc(sizeof(char *) * (size_t)(len + 1));
-            if (!pl->cmds[cmd_idx]) {
+            int arg_count;
+            char *redir_in;
+            char *redir_out;
+            int append_out;
+            char *redir_err;
+            int append_err;
+            int arg_idx;
+            arg_count = 0;
+            redir_in = NULL;
+            redir_out = NULL;
+            append_out = 0;
+            redir_err = NULL;
+            append_err = 0;
+            for (j = start; j < i; j++) {
+                if (strcmp(tokens[j], "<") == 0) {
+                    if (j + 1 >= i) {
+                        fprintf(stderr, "naesh: syntax error: missing filename\n");
+                        naesh_pipeline_free(pl);
+                        return NULL;
+                    }
+                    free(redir_in);
+                    redir_in = strdup(tokens[j + 1]);
+                    j++;
+                } else if (strcmp(tokens[j], ">") == 0) {
+                    if (j + 1 >= i) {
+                        fprintf(stderr, "naesh: syntax error: missing filename\n");
+                        naesh_pipeline_free(pl);
+                        return NULL;
+                    }
+                    free(redir_out);
+                    redir_out = strdup(tokens[j + 1]);
+                    append_out = 0;
+                    j++;
+                } else if (strcmp(tokens[j], ">>") == 0) {
+                    if (j + 1 >= i) {
+                        fprintf(stderr, "naesh: syntax error: missing filename\n");
+                        naesh_pipeline_free(pl);
+                        return NULL;
+                    }
+                    free(redir_out);
+                    redir_out = strdup(tokens[j + 1]);
+                    append_out = 1;
+                    j++;
+                } else if (strlen(tokens[j]) == 1 && tokens[j][0] >= '0' && tokens[j][0] <= '9' && j + 1 < i && (strcmp(tokens[j + 1], ">") == 0 || strcmp(tokens[j + 1], ">>") == 0 || strcmp(tokens[j + 1], "<") == 0)) {
+                    char fd;
+                    char *op;
+                    char *filename;
+                    fd = tokens[j][0];
+                    op = tokens[j + 1];
+                    filename = (j + 2 < i) ? tokens[j + 2] : NULL;
+                    if (!filename) {
+                        fprintf(stderr, "naesh: syntax error: missing filename\n");
+                        naesh_pipeline_free(pl);
+                        return NULL;
+                    }
+                    if (fd == '0' || (fd != '1' && fd != '2' && strcmp(op, "<") == 0)) {
+                        free(redir_in);
+                        redir_in = strdup(filename);
+                    } else if (fd == '2' || (fd != '0' && fd != '1' && strcmp(op, "<") != 0)) {
+                        free(redir_err);
+                        redir_err = strdup(filename);
+                        append_err = (strcmp(op, ">>") == 0);
+                    } else {
+                        free(redir_out);
+                        redir_out = strdup(filename);
+                        append_out = (strcmp(op, ">>") == 0);
+                    }
+                    j += 2;
+                } else {
+                    arg_count++;
+                }
+            }
+            pl->cmds[cmd_idx].args = (char **)malloc(sizeof(char *) * (size_t)(arg_count + 1));
+            if (!pl->cmds[cmd_idx].args) {
                 fprintf(stderr, "naesh: allocation error\n");
                 exit(1);
             }
-            for (j = 0; j < len; j++) {
-                pl->cmds[cmd_idx][j] = strdup(tokens[start + j]);
+            arg_idx = 0;
+            for (j = start; j < i; j++) {
+                if (strcmp(tokens[j], "<") == 0 || strcmp(tokens[j], ">") == 0 || strcmp(tokens[j], ">>") == 0) {
+                    j++;
+                    if (j < i) j++;
+                } else if (strlen(tokens[j]) == 1 && tokens[j][0] >= '0' && tokens[j][0] <= '9' && j + 1 < i && (strcmp(tokens[j + 1], ">") == 0 || strcmp(tokens[j + 1], ">>") == 0 || strcmp(tokens[j + 1], "<") == 0)) {
+                    j += 2;
+                } else {
+                    pl->cmds[cmd_idx].args[arg_idx++] = strdup(tokens[j]);
+                }
             }
-            pl->cmds[cmd_idx][len] = NULL;
+            pl->cmds[cmd_idx].args[arg_idx] = NULL;
+            pl->cmds[cmd_idx].redir_in = redir_in;
+            pl->cmds[cmd_idx].redir_out = redir_out;
+            pl->cmds[cmd_idx].append_out = append_out;
+            pl->cmds[cmd_idx].redir_err = redir_err;
+            pl->cmds[cmd_idx].append_err = append_err;
             cmd_idx++;
             start = i + 1;
         }
@@ -156,14 +271,10 @@ naesh_pipeline *naesh_parse(char **tokens) {
 
 void naesh_pipeline_free(naesh_pipeline *pl) {
     int i;
-    int j;
     if (!pl) return;
     if (pl->cmds) {
         for (i = 0; i < pl->count; i++) {
-            if (pl->cmds[i]) {
-                for (j = 0; pl->cmds[i][j]; j++) free(pl->cmds[i][j]);
-                free(pl->cmds[i]);
-            }
+            naesh_cmd_free(&pl->cmds[i]);
         }
         free(pl->cmds);
     }

@@ -29,6 +29,38 @@ int naesh_execute(char **args) {
     return 0;
 }
 
+static int apply_redirects(naesh_cmd *cmd) {
+    int fd;
+    if (cmd->redir_in) {
+        fd = open(cmd->redir_in, O_RDONLY);
+        if (fd == -1) {
+            perror(cmd->redir_in);
+            return -1;
+        }
+        dup2(fd, STDIN_FILENO);
+        close(fd);
+    }
+    if (cmd->redir_out) {
+        fd = open(cmd->redir_out, O_WRONLY | O_CREAT | (cmd->append_out ? O_APPEND : O_TRUNC), 0644);
+        if (fd == -1) {
+            perror(cmd->redir_out);
+            return -1;
+        }
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
+    }
+    if (cmd->redir_err) {
+        fd = open(cmd->redir_err, O_WRONLY | O_CREAT | (cmd->append_err ? O_APPEND : O_TRUNC), 0644);
+        if (fd == -1) {
+            perror(cmd->redir_err);
+            return -1;
+        }
+        dup2(fd, STDERR_FILENO);
+        close(fd);
+    }
+    return 0;
+}
+
 int naesh_exec_pipeline(naesh_pipeline *pl) {
     int i;
     int prev_fd;
@@ -38,28 +70,40 @@ int naesh_exec_pipeline(naesh_pipeline *pl) {
     int last_status;
     if (!pl || pl->count == 0) return 0;
     if (pl->count == 1) {
-        char **args = pl->cmds[0];
-        char *resolved;
-        pid_t pid;
-        if (!args || !args[0]) return 0;
-        if (is_builtin(args[0])) return run_builtin(args);
-        resolved = naesh_path_resolve(args[0]);
-        pid = fork();
-        if (pid == 0) {
-            if (resolved) execvp(resolved, args);
-            else execvp(args[0], args);
-            perror(args[0]);
-            _exit(127);
-        } else if (pid > 0) {
-            do {
-                waitpid(pid, &status, WUNTRACED);
-            } while (!WIFEXITED(status) && !WIFSIGNALED(status));
-            free(resolved);
-            return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
-        } else {
-            perror("fork");
-            free(resolved);
-            return 1;
+        naesh_cmd *cmd = &pl->cmds[0];
+        if (!cmd->args || !cmd->args[0]) {
+            if (cmd->redir_in || cmd->redir_out || cmd->redir_err) {
+                if (apply_redirects(cmd) == -1) return 1;
+            }
+            return 0;
+        }
+        if (!cmd->redir_in && !cmd->redir_out && !cmd->redir_err && is_builtin(cmd->args[0])) {
+            return run_builtin(cmd->args);
+        }
+        {
+            pid_t pid;
+            pid = fork();
+            if (pid == 0) {
+                if (apply_redirects(cmd) == -1) _exit(1);
+                {
+                    char *resolved = naesh_path_resolve(cmd->args[0]);
+                    if (resolved) {
+                        execvp(resolved, cmd->args);
+                    } else {
+                        execvp(cmd->args[0], cmd->args);
+                    }
+                }
+                perror(cmd->args[0]);
+                _exit(127);
+            } else if (pid > 0) {
+                do {
+                    waitpid(pid, &status, WUNTRACED);
+                } while (!WIFEXITED(status) && !WIFSIGNALED(status));
+                return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
+            } else {
+                perror("fork");
+                return 1;
+            }
         }
     }
     pids = (pid_t *)malloc(sizeof(pid_t) * (size_t)pl->count);
@@ -87,14 +131,15 @@ int naesh_exec_pipeline(naesh_pipeline *pl) {
                 dup2(pipefd[1], STDOUT_FILENO);
                 close(pipefd[1]);
             }
+            if (apply_redirects(&pl->cmds[i]) == -1) _exit(1);
             {
-                char *resolved = naesh_path_resolve(pl->cmds[i][0]);
+                char *resolved = naesh_path_resolve(pl->cmds[i].args[0]);
                 if (resolved) {
-                    execvp(resolved, pl->cmds[i]);
+                    execvp(resolved, pl->cmds[i].args);
                 } else {
-                    execvp(pl->cmds[i][0], pl->cmds[i]);
+                    execvp(pl->cmds[i].args[0], pl->cmds[i].args);
                 }
-                perror(pl->cmds[i][0]);
+                perror(pl->cmds[i].args[0]);
                 _exit(127);
             }
         } else if (pids[i] < 0) {

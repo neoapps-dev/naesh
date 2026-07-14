@@ -17,10 +17,12 @@ int naesh_repl(void) {
         }
         args = naesh_parse_line(line);
         pipeline = naesh_parse(args);
-        if (pipeline->count > 0) {
-            lastexit = naesh_exec_pipeline(pipeline);
+        if (pipeline) {
+            if (pipeline->count > 0) {
+                lastexit = naesh_exec_pipeline(pipeline);
+            }
+            naesh_pipeline_free(pipeline);
         }
-        naesh_pipeline_free(pipeline);
         {
             int i;
             for (i = 0; args[i]; i++) free(args[i]);

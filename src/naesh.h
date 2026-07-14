@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
@@ -14,8 +15,16 @@
 #define NAESH_PROMPT "$ " /*neo: TODO: make it use $PROMPT */
 #define NAESH_BUF_SIZE 1024
 typedef struct {
+    char **args;
+    char *redir_in;
+    char *redir_out;
+    int append_out;
+    char *redir_err;
+    int append_err;
+} naesh_cmd;
+typedef struct {
     int count;
-    char ***cmds;
+    naesh_cmd *cmds;
 } naesh_pipeline;
 int naesh_repl(void);
 char **naesh_parse_line(char *line);

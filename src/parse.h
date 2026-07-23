@@ -48,7 +48,7 @@ char **naesh_parse_line(char *line, int **out_quote_flags) {
                 if (*p == '"') {
                     in_dq = 0;
                     p++;
-                } else if (*p == '\\' && (p[1] == '"' || p[1] == '\\' || p[1] == '$')) {
+                } else if (*p == '\\' && p[1] == '"') {
                     p++;
                     tok[tpos++] = *p++;
                 } else {

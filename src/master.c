@@ -1,3 +1,4 @@
+#include "esc.h"
 #include "signal.h"
 #include "input.h"
 #include "path.h"

@@ -11,7 +11,7 @@
 - [x] C89 with -Weverything
 - [x] environment variable expansion ($VAR, ${VAR}, $?, $$, etc)
 - [x] quoting (single, double)
-- [ ] escape sequences
+- [x] escape sequences
 - [x] redirects (>, >>, <, 2>, etc)
 - [x] pipelines (|)
 - [ ] background execution (&)

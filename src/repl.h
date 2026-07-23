@@ -25,6 +25,18 @@ int naesh_repl(void) {
                 args[i] = expanded;
             }
         }
+        {
+            int i;
+            for (i = 0; args[i]; i++) {
+                if (quote_flags[i] == 2) {
+                    char *escaped = esc(args[i]);
+                    if (escaped) {
+                        free(args[i]);
+                        args[i] = escaped;
+                    }
+                }
+            }
+        }
         naesh_quote_flags_free(quote_flags);
         pipeline = naesh_parse(args);
         if (pipeline) {

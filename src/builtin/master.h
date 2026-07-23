@@ -1,3 +1,7 @@
 #include "cd.h"
 #include "exit.h"
 #include "history.h"
+#include "jobs.h"
+#include "fg.h"
+#include "bg.h"
+#include "disown.h"

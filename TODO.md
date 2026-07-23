@@ -14,8 +14,8 @@
 - [x] escape sequences
 - [x] redirects (>, >>, <, 2>, etc)
 - [x] pipelines (|)
-- [ ] background execution (&)
-- [ ] job control (fg, bg, jobs)
+- [x] background execution (&)
+- [x] job control (fg, bg, jobs, disown)
 - [x] command history
 - [ ] tab completion
 - [ ] script execution (. file / source)

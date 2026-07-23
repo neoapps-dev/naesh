@@ -14,6 +14,8 @@
 #define NAESH_VERSION "0.0.0" /*neo: i guess bro */
 #define NAESH_PROMPT "$ " /*neo: TODO: make it use $PROMPT */
 #define NAESH_BUF_SIZE 1024
+#define NAESH_MAX_JOBS 64
+typedef enum { JOB_RUNNING, JOB_STOPPED, JOB_DONE } job_status;
 typedef struct {
     char **args;
     char *redir_in;
@@ -25,6 +27,7 @@ typedef struct {
 typedef struct {
     int count;
     naesh_cmd *cmds;
+    int background;
 } naesh_pipeline;
 int naesh_repl(void);
 char **naesh_parse_line(char *line, int **quote_flags);

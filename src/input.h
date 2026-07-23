@@ -88,21 +88,27 @@ static char *naesh_read_line(void) {
         {
             fd_set rfds;
             struct timeval tv;
-            int maxfd = STDIN_FILENO > signal_fd ? STDIN_FILENO : signal_fd;
+            int maxfd = STDIN_FILENO > signal_read_fd ? STDIN_FILENO : signal_read_fd;
             FD_ZERO(&rfds);
             FD_SET(STDIN_FILENO, &rfds);
-            if (signal_fd != -1) {
-                FD_SET(signal_fd, &rfds);
+            if (signal_read_fd != -1) {
+                FD_SET(signal_read_fd, &rfds);
             }
             tv.tv_sec = 0;
             tv.tv_usec = 100000;
             if (select(maxfd + 1, &rfds, NULL, NULL, &tv) == -1) {
-                if (errno == EINTR) continue;
+                if (errno == EINTR) {
+                    char sigbyte;
+                    if (signal_read_fd != -1) {
+                        read(signal_read_fd, &sigbyte, 1);
+                    }
+                    continue;
+                }
                 break;
             }
-            if (signal_fd != -1 && FD_ISSET(signal_fd, &rfds)) {
+            if (signal_read_fd != -1 && FD_ISSET(signal_read_fd, &rfds)) {
                 char sigbyte;
-                if (read(signal_fd, &sigbyte, 1) == 1) {
+                if (read(signal_read_fd, &sigbyte, 1) == 1) {
                     (void)sigbyte;
                 }
                 continue;

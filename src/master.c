@@ -2,6 +2,7 @@
 #include "signal.h"
 #include "input.h"
 #include "path.h"
+#include "jobctl.h"
 #include "builtin.h"
 #include "exec.h"
 #include "parse.h"

@@ -28,7 +28,7 @@ char **naesh_parse_line(char *line, int **out_quote_flags) {
         if (*p == '\'') quote_flags[pos] = 1;
         else if (*p == '"') quote_flags[pos] = 2;
         else quote_flags[pos] = 0;
-        while (*p && (in_sq || in_dq || (*p != ' ' && *p != '\t' && *p != '\r' && *p != '\n' && *p != '|' && *p != '>' && *p != '<'))) {
+        while (*p && (in_sq || in_dq || (*p != ' ' && *p != '\t' && *p != '\r' && *p != '\n' && *p != '|' && *p != '>' && *p != '<' && *p != '&'))) {
             if (tpos >= tok_size - 1) {
                 tok_size *= 2;
                 tok = (char *)realloc(tok, (size_t)tok_size);
@@ -83,7 +83,7 @@ char **naesh_parse_line(char *line, int **out_quote_flags) {
             tokens[pos] = strdup(tok);
             pos++;
         }
-        if (*p == '|' || *p == '>' || *p == '<') {
+        if (*p == '&' || *p == '|' || *p == '>' || *p == '<') {
             if (*p == '>' && p[1] == '>') {
                 if (pos >= buf_size) {
                     buf_size *= 2;
@@ -289,10 +289,21 @@ naesh_pipeline *naesh_parse(char **tokens) {
         fprintf(stderr, "naesh: allocation error\n");
         exit(1);
     }
+    pl->background = 0;
     if (!tokens || !tokens[0]) {
         pl->cmds = NULL;
         pl->count = 0;
         return pl;
+    }
+    {
+        int last;
+        last = 0;
+        while (tokens[last]) last++;
+        if (last > 0 && strcmp(tokens[last - 1], "&") == 0) {
+            pl->background = 1;
+            free(tokens[last - 1]);
+            tokens[last - 1] = NULL;
+        }
     }
     cmd_count = 1;
     for (i = 0; tokens[i]; i++) {
@@ -403,6 +414,8 @@ naesh_pipeline *naesh_parse(char **tokens) {
                     if (j < i) j++;
                 } else if (strlen(tokens[j]) == 1 && tokens[j][0] >= '0' && tokens[j][0] <= '9' && j + 1 < i && (strcmp(tokens[j + 1], ">") == 0 || strcmp(tokens[j + 1], ">>") == 0 || strcmp(tokens[j + 1], "<") == 0)) {
                     j += 2;
+                } else if (strcmp(tokens[j], "&") == 0) {
+                    continue;
                 } else {
                     pl->cmds[cmd_idx].args[arg_idx++] = strdup(tokens[j]);
                 }

@@ -8,6 +8,7 @@ int naesh_repl(void) {
     lastexit = 0;
     setup_signals();
     while (running) {
+        handle_sigchld();
         sigint_received = 0;
         line = naesh_read_line();
         if (!line) break;

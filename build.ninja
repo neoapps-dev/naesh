@@ -4,7 +4,6 @@ ldflags = -ansi -std=c89
 rule cc
   command = $cc $cflags -c $in -o $out
   depfile = $out.d
-  deps = gcc
 
 rule link
   command = $cc $ldflags $in -o $out
